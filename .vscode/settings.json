@@ -1,24 +1,21 @@
 {
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "cmake.configureOnOpen": true,
-    "cmake.exportCompileCommandsFile": true,
-    "cmake.buildBeforeRun": true,
-    "C_Cpp.intelliSenseEngine": "default",
-    "clangd.enable": false,
-    "files.associations": {
-        "main.h": "c",
-        "bmp280.h": "c",
-        "stdint.h": "c"
-    },
-    "cmake.configureSettings": {
-        "CMAKE_BUILD_TYPE": "Debug"
-    },
-    "cmake.buildPreset": "Debug",
-    "cmake.configurePreset": "Debug",
-    "cmake.showBuildPreset": true,
-    "cmake.showConfigurePreset": true,
-    "cmake.cmakePath": "cube-cmake",
-    "cmake.configureArgs": [
-        "-DCMAKE_COMMAND=cube-cmake"
-    ]
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "cmake.configureOnOpen": true,
+  "cmake.exportCompileCommandsFile": true,
+  "cmake.buildBeforeRun": true,
+  "C_Cpp.intelliSenseEngine": "default",
+  "clangd.enable": false,
+  "files.associations": {
+    "main.h": "c",
+    "stdbool.h": "c"
+  },
+  "cmake.configureSettings": {
+    "CMAKE_BUILD_TYPE": "Debug"
+  },
+  "cmake.buildPreset": "Debug",
+  "cmake.configurePreset": "Debug",
+  "cmake.showBuildPreset": true,
+  "cmake.showConfigurePreset": true,
+  "cortex-debug.armToolchainPath": "/opt/ST/STM32CubeCLT_1.18.0/GNU-tools-for-STM32/bin",
+  "cortex-debug.gdbPath": "/opt/ST/STM32CubeCLT_1.18.0/GNU-tools-for-STM32/bin/arm-none-eabi-gdb"
 }
