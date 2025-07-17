@@ -63,7 +63,9 @@ float pressure, temperature, humidity;
 
 uint16_t size;
 uint8_t Data[256];
-
+static bool flag = false;
+float current;
+float pressure;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,7 +79,10 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
+void send_CAN_Message(uint32_t stdId, uint8_t *data, uint8_t dlc);
+void CAN_Receive(CAN_HandleTypeDef *hcan);
+float GetAccl();
+void ReadPressAndWriteToNORFlash();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -144,6 +149,21 @@ bmp280_init_default_params(&bmp280.params);
   */
   /*ココ！！*/
 
+  CAN_FilterTypeDef filter;
+  filter.FilterActivation = 1;
+  filter.FilterBank = 0;
+  filter.FilterFIFOAssignment = 0;
+  filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  filter.FilterScale = CAN_FILTERSCALE_32BIT;
+  filter.FilterIdHigh = 0x0000;
+  filter.FilterIdLow = 0x0000;
+  filter.FilterMaskIdHigh = 0x0000;
+  filter.FilterMaskIdLow = 0x0000;
+  HAL_CAN_ConfigFilter(&hcan, &filter);
+
+  HAL_CAN_Start(&hcan);
+  HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING);
+
 /* BME280のプログラム
 	HAL_Delay(100);
 		while (!bmp280_read_float(&bmp280, &temperature, &pressure, &humidity))
@@ -159,13 +179,6 @@ bmp280_init_default_params(&bmp280.params);
 
 */
 
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-
-  //分離の独自フェーズ
   typedef enum {
     SEP_Phase_0,
     SEP_Phase_1,
@@ -182,8 +195,19 @@ bmp280_init_default_params(&bmp280.params);
   //タイマーの閾値（分離ニクロム線加熱終了から30秒）
   const uint32_t ThresholdTime = 30000;
 
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+
+  //分離の独自フェーズ
+
   while (1)
   {
+
+    //send_CAN_Message(0x123, Data, 8);
+    //CAN_Receive(&hcan);
+
     //気圧データをNORフラッシュに記録する関数
     ReadPressAndWriteToNORFlash();
     
@@ -195,8 +219,7 @@ bmp280_init_default_params(&bmp280.params);
 
       case SEP_Phase_0:
           
-          if (/*メインから頂点検知通知*/) {
-
+          if (flag = true) {
             SEP_Phase = SEP_Phase_1;
           }
           break;
@@ -212,7 +235,7 @@ bmp280_init_default_params(&bmp280.params);
           break;
       
       case SEP_Phase_2:
-          if (GetAccl(float current) == 0) {
+          if (GetAccl() == 0) {
             /*ニクロム線加熱×２*/
             SEP_Phase = SEP_Phase_3;
 
@@ -257,7 +280,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -267,12 +290,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -424,11 +447,11 @@ static void MX_CAN_Init(void)
 
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 16;
+  hcan.Init.Prescaler = 2;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
@@ -516,7 +539,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -674,8 +697,9 @@ int _write(int file, char *ptr, int len)
 	return len;
 }
 
-float GetAccl(float current)
+float GetAccl()
 {
+  /*
   float prev = ;
   float prev2 = ;
   const float GAMMA = 6.5; // (温度変化率（10kmまでは6.5[K/km]）) [K/km]
@@ -693,9 +717,70 @@ float GetAccl(float current)
 
   const float Accl = (Numerator / Denominator) * ((alpha -1 ) * pow(dp, 2) + current * d2p);
   return Accl;
+  */
+}
+void send_CAN_Message(uint32_t stdId, uint8_t *data, uint8_t dlc)
+{
+  CAN_TxHeaderTypeDef txHeader;
+  uint32_t txMailbox;
+  uint8_t txData[8];
+  txHeader.StdId = stdId;
+  txHeader.DLC = dlc;
+  txHeader.TransmitGlobalTime = DISABLE;
+  for (int i = 0; i < dlc; i++)
+  {
+    txData[i] = data[i];
+  }
+
+  while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan) == 0);
+  if (HAL_CAN_AddTxMessage(&hcan, &txHeader, txData, &txMailbox) != HAL_OK)
+  {
+
+    Error_Handler();
+  }
 }
 
+void CAN_Receive(CAN_HandleTypeDef *hcan)
+{
+  CAN_RxHeaderTypeDef rxHeader;
+  uint8_t rxData[8];
 
+  // 受信FIFOにメッセージがあるか確認
+  if (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0)
+  {
+    // メッセージを受信
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rxHeader, rxData) == HAL_OK)
+    {
+    }
+    else
+    {
+      printf("受信エラー\n");
+    }
+  }
+}
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
+{
+  CAN_RxHeaderTypeDef RxHeader; // 受信メッセージの情報が格納されるインスタンス
+  uint8_t RxData[8] = {0};            // 受信したデータを一時保存する配列
+  if (HAL_CAN_GetRxMessage(hcan1, CAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
+  {
+    if(RxHeader.StdId == 0x123){
+        if (RxData[0] == 'S')
+        {
+          flag = true;
+        }
+    }else if(RxHeader.StdId == 0x124){
+      memcpy(&pressure, RxData, sizeof(float));
+
+    }
+    
+  }
+}
+
+void ReadPressAndWriteToNORFlash(){
+  
+}
 /* USER CODE END 4 */
 
 /**
