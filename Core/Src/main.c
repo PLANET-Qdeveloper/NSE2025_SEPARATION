@@ -144,15 +144,8 @@ bmp280_init_default_params(&bmp280.params);
   */
   /*ココ！！*/
 
-
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-	  	HAL_Delay(100);
+/* BME280のプログラム
+	HAL_Delay(100);
 		while (!bmp280_read_float(&bmp280, &temperature, &pressure, &humidity))
 		{
 			printf("Temperature/pressure reading failed\r\n");
@@ -162,13 +155,83 @@ bmp280_init_default_params(&bmp280.params);
 		printf("Pressure: %d Pa, Temperature: %d C\r\n",(int)pressure, (int)temperature*100);
 		//printf(", Humidity: %d\r\n", humidity*100);
 
-	  	HAL_Delay(2000);
+	HAL_Delay(2000);
+
+*/
 
 
+  /* USER CODE END 2 */
 
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 
+  //分離の独自フェーズ
+  typedef enum {
+    SEP_Phase_0,
+    SEP_Phase_1,
+    SEP_Phase_2,
+    SEP_Phase_3
+  } SystemPhase_t;
 
+  //フェーズ保持・初期フェーズ設定
+  SystemPhase_t SEP_Phase = SEP_Phase_0;
+
+  //SEP_Phase_2の開始時刻設定
+  uint32_t Phase2_StartTime = 0;
+
+  //タイマーの閾値（分離ニクロム線加熱終了から30秒）
+  const uint32_t ThresholdTime = 30000;
+
+  while (1)
+  {
+    //気圧データをNORフラッシュに記録する関数
+    ReadPressAndWriteToNORFlash();
+    
+    switch (SEP_Phase) {
+      //SEP_Phase_0: 電源ON → 頂点検知（MAIN）
+      //SEP_Phase_1: 分離ニクロム線加熱
+      //SEP_Phase_2: [終端検知　 → リーフィングニクロム線加熱] OR [タイマー → リーフィングニクロム線加熱]
+      //SEP_Phase_3: 全ニクロム線加熱終了
+
+      case SEP_Phase_0:
+          
+          if (/*メインから頂点検知通知*/) {
+
+            SEP_Phase = SEP_Phase_1;
+          }
+          break;
       
+      case SEP_Phase_1:
+          HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
+          __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 10);
+          HAL_Delay(4000);
+          HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_4);
+          /*もう一つのニクロム線加熱*/
+          SEP_Phase = SEP_Phase_2;
+          Phase2_StartTime = HAL_GetTick();
+          break;
+      
+      case SEP_Phase_2:
+          if (GetAccl(float current) == 0) {
+            /*ニクロム線加熱×２*/
+            SEP_Phase = SEP_Phase_3;
+
+          } else if ((HAL_GetTick() - Phase2_StartTime) >= ThresholdTime) {
+            /*ニクロム線加熱×２*/
+            SEP_Phase = SEP_Phase_3;            
+          }
+          break;
+
+      case SEP_Phase_3:
+          break;
+
+      default:
+          break;
+    }
+
+
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
